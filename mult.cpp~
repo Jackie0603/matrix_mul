@@ -1,0 +1,70 @@
+#include <time.h>
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <pthread.h>
+
+extern "C" {
+#include <immintrin.h>
+}
+
+void mult_original(float* a, float* b, float*c, int matrix_size, int thread_count) {
+	for ( int i = 0; i < matrix_size; i++ ) {
+		for ( int j = 0; j < matrix_size; j++ ) {
+			c[i*matrix_size+j] = 0;
+			for ( int k = 0; k < matrix_size; k++ ) {
+				c[i*matrix_size+j] += a[i*matrix_size+k]*b[k*matrix_size+j];
+			}
+		}
+	}
+}
+
+void mult_transpose(float* a, float* b, float*c, int matrix_size, int thread_count) {
+	float* bt = (float*)malloc(sizeof(float)*matrix_size*matrix_size);
+	for ( int i = 0; i < matrix_size; i++ ) {
+		for ( int j = 0; j < matrix_size; j++ ) {
+			bt[i*matrix_size+j] = b[j*matrix_size+i];
+		}
+	}
+
+	for ( int i = 0; i < matrix_size; i++ ) {
+		for ( int j = 0; j < matrix_size; j++ ) {
+			c[i*matrix_size+j] = 0;
+			for ( int k = 0; k < matrix_size; k++ ) {
+				c[i*matrix_size+j] += a[i*matrix_size+k]*bt[j*matrix_size+k];
+			}
+		}
+	}
+	free(bt);
+}
+
+void mult_avx(float* a, float* b, float*c, int matrix_size, int thread_count) {
+	float* bt = (float*)malloc(sizeof(float)*matrix_size*matrix_size);
+	for ( int i = 0; i < matrix_size; i++ ) {
+		for ( int j = 0; j < matrix_size; j++ ) {
+			bt[i*matrix_size+j] = b[j*matrix_size+i];
+		}
+	}
+
+	for ( int i = 0; i < matrix_size; i++ ) {
+		for ( int j = 0; j < matrix_size; j++ ) {
+			__m256 z = _mm256_set1_ps(0);
+			for ( int k = 0; k < matrix_size/8; k++ ) {
+				__m256 x = _mm256_loadu_ps(&a[i*matrix_size+k*8]);
+				__m256 y = _mm256_loadu_ps(&bt[j*matrix_size+k*8]);
+				z = _mm256_fmadd_ps(x,y,z);
+			}
+			c[i*matrix_size+j] = 0;
+			for (int k = 0; k < 8; k++ ) {
+				c[i*matrix_size+j] += ((float*)&z)[k];
+			}
+
+		}
+	}
+
+	free (bt);
+}
+
+void mult(float* a, float* b, float*c, int matrix_size, int thread_count) {
+	mult_original(a,b,c,matrix_size,thread_count);
+}
